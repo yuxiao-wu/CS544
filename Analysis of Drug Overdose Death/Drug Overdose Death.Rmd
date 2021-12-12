@@ -1,0 +1,545 @@
+---
+title: "Analysis of Drug Overdose Death"
+author: "Yuxiao Wu, Tianyue Hong, Zeyi Chen"
+date: 2021-12-1
+output:
+  html_document:
+    fig_width: 8
+    code_folding: hide
+    highlight: tango
+    toc: yes
+    toc_float:
+      collapsed: yes
+  pdf_document:
+    toc: yes
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width=8, fig.height=4,
+                      echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+
+
+# Introduction
+
+Drug abuse is a huge problem that can affect all of us, wherever we live and whatever we do. And Drug abuse can cause serious physical and mental problems that can tear apart the family and make our life hard and impossible sometimes.
+
+Because most of drug abusers start to take drugs from teenagers, Stealing from parents or individuals to get money for drugs causes big conflicts in their families. and it may end up in many sad forms such like Arrests and jailing and even death, so Drug abuse is destroying the lives of many teens and adults and is also destroying families across the world.
+
+Therefore, our team decided to analysis the death caused by drug overdose to know more information for drug abuse.
+
+# The Dataset 
+
+The following data set captures the recorded Death caused by drug overdose in Connecticut from 2012 to 2018. The data set was retrieved from Kaggle. It contains information for about 5000 drug overdosed death victims. Attributes of the data includes the Age, Gender, Race, Date and place of occurrence, type of drug consumed and the cause of death. 
+
+## Data Preparing
+
+Among the data set, there are 16 different type of drugs that causes drug overdose death. If an victim was dead because of consuming one kind of drug, them the value of that row of the specific drug will be 1, otherwise it will be zero. We found that some of the values in the data set is missing or have an empty value. So modified some values in the data set. For example, we convert some character values in the different drugs column to make values in all drug columns numeric value, which make calculation easier. 
+
+```{r echo=TRUE}
+library(plotly)
+library(prob)
+library(tidyr)
+library(RColorBrewer)
+library(sampling)
+library(stringr)
+library(sf)
+library(tidyverse)
+drug_deaths <- read.csv("https://raw.githubusercontent.com/yuxiao-wu/CS544/main/drug.csv")
+
+drug_deaths$Fentanyl <- drug_deaths$Fentanyl != 0
+drug_deaths$Morphine_NotHeroin <- drug_deaths$Morphine_NotHeroin != 0
+
+```
+
+# General Analysis of Death Caused by Drug Overdose
+
+As stated before, drug abuse is an significant cause of death in US. Thus, it is important for us to understand how the drugs and death are related and how can we prevent the drug abuse. In this part, team will do analysis for some general variables in the data set, such as the age, gender and race for the victims. And explore some interesting facts using the data set. The team will also do some analysis for the cause of death and how different type of drugs can affect the death. 
+
+## Death by Drug Overdose by Date
+
+The first analysis was done using the date variable. The deaths caused by drug overdose from 2012 to 2018 was summed up and grouped by each month and showed in a histogram plot. The Date is on the x axis and number of death is on y axis.
+
+```{r echo=TRUE}
+
+drug_deaths$Date = as.Date(drug_deaths$Date, format='%m/%d/%Y')
+p1 <- plot_ly(drug_deaths, x = ~Date, type = 'histogram', histfunc = 'avg',name = 'death',
+              marker = list(color = c('rgba(99, 231, 234, 0.8)')))%>%
+    add_trace(x = ~Date, name = 'death')%>%
+  layout(title = 'Drug Overdose Death from 2012 to 2018',
+         yaxis = list(title = 'Number of death'),
+         showlegend = FALSE)
+
+p1
+```
+
+As shown in the graph of Drug Overdose Death from 2012 to 2018, we can clear see that the number of drug overdose death was increasing overtime. In Jan 2012, there was 58 death related to drug overdose, while in May 2018, the number of death increased to 194, which is almost 4 times than in 2012. 
+
+## Deaths Caused by Different Drugs
+
+Now here comes to the question that which drug caused the most death? How many death does it caused and how it compares to other drugs? The below bar chart shows all 16 drugs recorded that are cause of death and the number of death caused by consuming it. The graph was obtained by summing up all the columns for drug names and create a new table showing the name of drugs and number of death caused by this kind of drug. 
+
+```{r echo = TRUE}
+
+drug_name <- c("Heroin",
+               "Cocaine",
+               "Fentanyl",
+               "Fentanyl_Analogue",
+               "Oxycodone",
+               "Oxymorphone",
+               "Ethanol",
+               "Hydrocodone",
+               "Benzodiazepine",
+               "Methadone",
+               "Amphet",
+               "Tramad",
+               "Morphine_NotHeroin",
+               "Hydromorphone",
+               "OpiateNOS",
+               "AnyOpioid")
+Drugs <- drug_deaths %>% select(drug_name)
+
+
+list_drug <- as.list(Drugs)
+sum_death <- numeric(length(drug_name))
+for (i in 1:length(drug_name)) {
+  sum_death[i] <- sum(list_drug[[i]] == 1)
+}
+plot_ly(
+  x = sum_death, y = drug_name, type = "bar", color = I("orange"),
+  orientation = 'h')%>%
+  layout(title = 'Type of Drugs Causing Death',
+         xaxis = list(title = "Number of Death"),
+         yaxis = list(title = "Drug Consumed",
+                      categoryorder = "total ascending"))
+
+```
+
+The above graph clearly shows that Heroin leads to highest number of death, followed by Opioid, Fentanyl, Cocaine and Benzodiazepinee. Also, an interesting fact is that the total number of death caused by each individual drug is greater than the total death. which means there are people consuming more than one drugs at same time. 
+
+
+## Male or Female
+
+Among those five thousands victims, how many of them are male and how many of them are female? the below bar char can help us to check the gender proportion.
+
+```{r echo = TRUE}
+
+# sex
+male <- sum(drug_deaths$Sex == 'Male')
+female <- sum(drug_deaths$Sex == 'Female')
+percent <- c(scales::percent(male/(female+male)),scales::percent(female/(female+male)))
+plot_ly(
+  x = c('Male', 'Female'), y = c(male, female),type = "bar",
+  marker = list(color = c('rgba(89, 227, 106, 0.8)','rgba(201, 89, 227, 0.8)')))%>%
+  add_text(text = ~paste0(percent),
+           textposition = 'top',
+           textfont = list(size = 15, color = "black"))%>%
+  layout(title = 'Male and Female',
+         xaxis = list(title = "Gender"),
+         yaxis = list(title = "Count"),
+         showlegend = FALSE)
+
+```
+
+And here shows that 74% are Male and 26% are Female. Which means males are more easily to be Drug abused than females generally. 
+
+## Drugs taken by male and female
+
+Which drugs do men and women take the most? Below bar chart shows the data about it. In this part, a subset is taken and the data frame of the drugs and number of death who took it is calculated in this part. These analyses help to understand whether there is a preference for different drugs due to different genders. 
+
+```{r echo = TRUE}
+# Drugs taken by male
+female <- subset(drug_deaths, drug_deaths$Sex == 'Female')
+s1<-sum(female$Heroin)
+s2<-sum(female$Cocaine)
+s3 <- sum(female$Fentanyl == 1)
+s4<-sum(female$Fentanyl_Analogue)
+s5<-sum(female$Oxycodone)
+s6<-sum(female$Oxymorphone)
+s7<-sum(female$Ethanol)
+s8<-sum(female$Hydrocodone)
+s9<-sum(female$Benzodiazepine)
+s10<-sum(female$Methadone)
+s11<-sum(female$Amphet)
+s12<-sum(female$Tramad)
+s13<- sum(female$Morphine_NotHeroin == 1)
+s14<-sum(female$Hydromorphone)
+s15<-sum(female$OpiateNOS)
+s16<-sum(female$AnyOpioid)
+sum_female = c(s1,s2,s3,s4,s5,s6,s7,s8,s9,s10,s11,s12,s13,s14,s15
+             ,s16)
+df1<-data.frame(sum_female,drug_name) 
+
+male <- subset(drug_deaths, drug_deaths$Sex == 'Male')
+s1<-sum(male$Heroin)
+s2<-sum(male$Cocaine)
+s3 <- sum(male$Fentanyl == 1)
+s4<-sum(male$Fentanyl_Analogue)
+s5<-sum(male$Oxycodone)
+s6<-sum(male$Oxymorphone)
+s7<-sum(male$Ethanol)
+s8<-sum(male$Hydrocodone)
+s9<-sum(male$Benzodiazepine)
+s10<-sum(male$Methadone)
+s11<-sum(male$Amphet)
+s12<-sum(male$Tramad)
+s13<- sum(male$Morphine_NotHeroin == 1)
+s14<-sum(male$Hydromorphone)
+s15<-sum(male$OpiateNOS)
+s16<-sum(male$AnyOpioid)
+sum_male = c(s1,s2,s3,s4,s5,s6,s7,s8,s9,s10,s11,s12,s13,s14,s15
+             ,s16)
+df1$sum_male <- sum_male
+df1 <- df1[order(-df1$sum_male),]
+
+
+plot_ly(df1, 
+        y = ~sum_female,
+        x = ~drug_name,
+        type = "bar", 
+        name = 'Female', 
+        marker = list(color = c('rgba(243, 68, 158, 0.8)')))  %>%
+    add_trace(x = ~drug_name, y = ~sum_male, name = 'Male',
+              marker = list(color = c('rgba(54, 54, 247, 0.8)')))%>%
+  layout(
+    title = "Drugs taken by Male vs Female",
+    xaxis = list(title = "Drug name",categoryorder = "sum descending"),
+    yaxis = list(title = "Number of death"),
+    barmode = 'group')
+
+
+```
+From the chart we can find that the most popular drugs among male are Heroin, AnyOpioid and Fenrtanyl, and the most popular drug among female is Opioid. 
+
+## Drugs taken by race
+
+Now the race attribute is take in to account. We want to see how different races are distributed among all victims. And this was done by plotting a pie chart. For this analysis, there was a new dataframe created named DF2, which holds the table format of the number of dead people by taking drugs broken down by race. Please note that the percentages of race for the entire population of the US was not included in the dataset.
+
+```{r echo = TRUE}
+white <- sum(drug_deaths$Race =='White')
+black <- sum(drug_deaths$Race =='Black')
+hispanic <- sum(drug_deaths$Race =='Hispanic, Black' |
+                         drug_deaths$Race =='Hispanic, White')
+asian<- sum(drug_deaths$Race =='Asian Indian'|
+                      drug_deaths$Race =='Asian, Other'|
+                      drug_deaths$Race =='Chinese')
+other <- sum(drug_deaths$Race =='Unknown'|
+                      drug_deaths$Race =='Unknown'|
+                    drug_deaths$Race =='Hawaiian')
+race_name <- c('White', 'Black', 'Hispanic','Asian','Other')
+race <- c(white, black, hispanic, asian, other)
+DF2 <- data.frame(race,race_name)
+fig <- plot_ly(DF2, labels = ~race_name, values = ~race, type = 'pie')
+fig <- fig %>% layout(title = 'Drug death by race',
+                      xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+                      yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+
+fig
+```
+
+From the chart above, we can see that 78.8% of victims are white, 11.5% are Hispanic, 8.5% are black, The Asian and other races are the minimum,accounts for only 1.141%. 
+
+## Top ten cities in Connecticut with the highest number of drug deaths
+
+Because the data was collect from state Connecticut, we might also want to know which city in Connecticut has the most number of death. Are there a disproportionate number of drugs deaths in one area of the Connecticut verse another? The below chart shows the top ten frequencies of deaths by city.To get this information into a relevant format, there was another data frame created that held the information of states and the number of drug deaths. The cities are on the x axis and the frequencies are on the y axis.
+
+```{r echo = TRUE}
+
+a<-as.data.frame(table(drug_deaths$DeathCity))
+a <- a[order(-a$Freq),]
+plot_ly(x = a$Var1[1:10],
+        y = a$Freq[1:10],
+        type = "bar",
+        marker = list(color = c('rgba(95, 177, 255, 0.8)')))  %>%
+  layout(
+    title = "Top 10 cities in Connecticut with the highest number of drug deaths",
+    xaxis = list(title = "City",categoryorder = "sum descending"),
+    yaxis = list(title = "number of drugs death")
+  )
+
+```
+
+As shown in the graph above, we can see that the city with most deaths is Hartford with 563 deaths, and followed by New haven with 374 deaths and then Waterbury with 368 deaths. 
+
+# Geographical Distribution
+
+The data set also contains the information of coordinates for all drug overdosed deaths, including the city name, latitude and longitude. By using these information, we can show the distribution of deaths on map using scatter map plot. Because of the format of coordinates in the data frame is unusable at first, we used the str_extract and str_split method to split the data into city names, lat and long to make data readable for plotly. 
+
+```{r echo = TRUE}
+coords <- str_extract_all(drug_deaths$DeathCityGeo, '([0-9]{2})([.])([0-9]{4})')
+cityname <- str_split(drug_deaths$DeathCityGeo, '\n')
+lat <- numeric(length(coords)/2)
+lon <- numeric(length(coords)/2)
+city <- numeric(length(coords)/2)
+for (i in seq(1,length(coords))){
+  lat[i] <- coords[[i]][1]
+  lon[i] <- coords[[i]][2]
+  city[i] <-toupper(cityname[[i]][1])
+}
+coord_df <- data.frame(lat, lon,city)
+city_name <- unique(coord_df$city)
+city_count <- numeric(length(city_name))
+
+for (i in 1:length(city_name)){
+  city_count[i] <- sum(city == city_name[i])
+}
+city_df <- data.frame(city_name, city_count)
+city_lat <- numeric(nrow(city_df))
+city_lon <- numeric(nrow(city_df))
+for (i in 1:nrow(city_df)){
+  city_lat[i] <- as.numeric(unique(coord_df[coord_df$city == city_name[i],])$lat)
+  city_lon[i] <- 0 - as.numeric(unique(coord_df[coord_df$city == city_name[i],])$lon)
+}
+
+city_df$lat <- city_lat
+city_df$lon <- city_lon
+city_df$lat <- as.double(city_df$lat)
+city_df$lon <- as.double(city_df$lon)
+
+fig <- city_df 
+fig <- fig %>%
+  plot_ly(
+    lat = ~lat,
+    lon = ~lon,
+    color = ~city_count,
+    size = ~city_count,
+    type = 'scattermapbox',
+    hovertext = ~paste(city_name, paste("Deaths:", city_count), sep = "<br />")) 
+fig <- fig %>%
+  colorbar(title = "Number of Death")%>%
+  layout(title = 'Drug overdose Death in Connecticut',
+    mapbox = list(
+      style = 'carto-positron',
+      zoom = 7.5,
+      center = list(lon = -72.67, lat = 41.6))) 
+
+fig
+```
+
+As shown in the plot, we can see that the yellow and green color represents higher number of death and purple and black color represents fewer death. For example, Hartford has 563 deaths.
+
+# Distribution of the Data
+
+## Ages distribution by gender
+
+Age is another very important element to analysis. By analyzing the age distribution, we can better understand which age range is more likely to become drug abused. The figure below shows the age distribution for all drug overdose deaths by gender. The graph is staked histogram. As the graph shown, the ages are not normally distributed, most victims are centered in 30 and 50 years age. An interesting fact is that the smallest victim is only 14 years old and the oldest victim is 87 years old!
+
+```{r echo = TRUE}
+# age distribution
+drug_deaths_male <- subset(drug_deaths, drug_deaths$Sex == 'Male')
+drug_deaths_female <- subset(drug_deaths, drug_deaths$Sex == 'Female')
+
+fig <- plot_ly(
+  type='histogram',
+  x=drug_deaths_male$Age,
+  bingroup=1,
+  name = 'male')
+
+fig <- fig %>% add_trace(
+  type='histogram',
+  x=drug_deaths_female$Age,
+  bingroup=1,
+  name = 'female')
+
+fig <- fig %>% layout(
+  barmode="stack",
+  title = 'Ages distribution',
+  xaxis = list(title = "Ages"),
+  yaxis = list(title = "Count"))
+
+fig
+```
+
+## Ages distribution by race
+
+After seen the age distribution by gender, we are now interested in the age distribution by race. In which race the median of the death is the smallest or largest? By using the box plot, it can help us to have a clear view of how the ages are distributed in different races. 
+
+```{r echo = TRUE}
+white_age <- subset(drug_deaths, drug_deaths$Race =='White')
+black_age <- subset(drug_deaths, drug_deaths$Race =='Black')
+hispanic_age <- subset(drug_deaths, drug_deaths$Race =='Hispanic, Black' |
+                         drug_deaths$Race =='Hispanic, White')
+asian_age <- subset(drug_deaths, drug_deaths$Race =='Asian Indian'|
+                      drug_deaths$Race =='Asian, Other'|
+                      drug_deaths$Race =='Chinese')
+other_age <- subset(drug_deaths, drug_deaths$Race =='Unknown'|
+                      drug_deaths$Race =='Unknown'|
+                    drug_deaths$Race =='Hawaiian')
+
+fig <- plot_ly(x = white_age$Age, type = "box",name = 'White')
+fig <- fig %>% add_trace(x = black_age$Age, name = 'Black')
+fig <- fig %>% add_trace(x = hispanic_age$Age,name = 'Hispanic')
+fig <- fig %>% add_trace(x = asian_age$Age,name = 'Asian')
+fig <- fig %>% add_trace(x = other_age$Age,name = 'Other')
+fig <- fig %>% layout(title = "Age Distribution by Race",
+                      xaxis = list(title = "Ages"))
+fig
+```
+As the graph shown above, we can see that median drug overdose death in white is 41 years old, 48 years old for black, 43 years old for Hispanic, 38.5 years old for other groups and only 31 years old for Asians. Which we can conclude that Asian people are likely to be drug abused in around 30 years old range and blacks are likely to be drug abused over 45 years old. 
+
+# Central Limit Theorem
+
+The central limit theorem states that if you have a population with mean μ and standard deviation σ and take sufficiently large random samples from the population, then the distribution of the sample means will be approximately normally distributed. This will hold true regardless of whether the source population is normal or skewed, provided the sample size is sufficiently large (usually n > 30). If the population is normal, then the theorem holds true even for samples smaller than 30.
+
+Our team select the Age column for performing the central limit theorem. Figures below shows the distribution of 1000 random samples of sample size from 10 to 40. As shown in pervious age distribution plot, we can see that the ages are not normally distributed, however, after using the central limit theorem,  all four plots shows graph slimier to normal distribution, which proves the central limit theorem. 
+
+```{r echo = TRUE}
+
+# Central Limit Theorem
+
+# population mean and sd
+options(digits = 4)
+drug_age <- drug_deaths$Age[!is.na(drug_deaths$Age)]
+mean0 <- mean(drug_age)
+sd0<- sd(drug_age)
+cat('population mean =', mean0, 'SD =', sd0,"\n")
+
+par(mfrow=c(2,2))
+
+
+#Central limit size = 10
+set.seed(7174)
+n1 <- numeric(1000)
+for (i in 1:1000){
+  sample <- sample(drug_age,10)
+  n1[i] <- mean(sample)
+}
+mean1 <- mean(n1)
+sd1 <- sd(n1)
+n1DF <-data.frame(n1)
+p1 <- plot_ly(n1DF, x = ~n1,type = 'histogram', name = 'Sample size 10')  %>%
+  layout(title = "Sample size = 10", xaxis = list(title = "Number of deaths"),
+         yaxis = list(title = "Frequency",range = c(0,100))
+  )
+
+
+#Central limit size = 20
+n1 <- numeric(1000)
+for (i in 1:1000){
+  sample <- sample(drug_age,20)
+  n1[i] <- mean(sample)
+}
+mean2 <- mean(n1)
+sd2 <- sd(n1)
+n1DF <-data.frame(n1)
+p2 <- plot_ly(n1DF, x = ~n1,type = 'histogram', name = 'Sample size 20')  %>%
+  layout(title = "Sample size = 20", xaxis = list(title = "Number of deaths"),
+         yaxis = list(title = "Frequency",range = c(0,100))
+  )
+
+
+#Central limit size = 30
+n1 <- numeric(1000)
+for (i in 1:1000){
+  sample <- sample(drug_age,30)
+  n1[i] <- mean(sample)
+}
+mean3 <- mean(n1)
+sd3 <- sd(n1)
+n1DF <-data.frame(n1)
+p3 <- plot_ly(n1DF, x = ~n1,type = 'histogram', name = 'Sample size 30')  %>%
+  layout(title = "Sample size = 30", xaxis = list(title = "Number of deaths"),
+         yaxis = list(title = "Frequency",range = c(0,100))
+  )
+
+
+#Central limit size = 40
+n1 <- numeric(1000)
+for (i in 1:1000){
+  sample <- sample(drug_age,40)
+  n1[i] <- mean(sample)
+}
+mean4 <- mean(n1)
+sd4 <- sd(n1)
+n1DF <-data.frame(n1)
+p4 <- plot_ly(n1DF, x = ~n1,type = 'histogram', name = 'Sample size 40')  %>%
+  layout(title = "Sample size = 40", xaxis = list(title = "Number of deaths"),
+         yaxis = list(title = "Frequency",range = c(0,100))
+  )
+
+subplot(p1,p2,p3,p4, 
+        nrows = 2)%>%
+  layout(title = list(text = 'Central Limit Theorem'),
+         yaxis = list(range = c(0,100)))
+
+cat(' Sample Size = 10, Mean =',mean1, 'SD =',sd1,"\n")%>%
+cat('Sample Size = 20, Mean =',mean2, 'SD =',sd2,"\n")%>%
+cat('Sample Size = 30, Mean =',mean3, 'SD =',sd3,"\n")%>%
+cat('Sample Size = 40, Mean =',mean4, 'SD =',sd4,"\n")
+
+
+```
+
+# Sampling
+
+Sampling is a technique used for analysis patterns and trends for a large group of data, which is hard or difficult to analysis the whole group of data. By sampling, a small portion of data is selected from the original population, and the sample is used for analyzing the original data. Therefore, the sampled data should be able to represent the same trend or patterns for the original data. There are many different sampling methods. In this section, Simple random sampling, Systematic Sampling and Stratified Sampling were used to sample the data set. Our team set the sample size to be 500, which means we need to select 500 rows from the original 5000 data set. Simple random sampling without replacement is simply using random selection to pick data from the original data set. Systematic sampling is to first divide the original data set into n groups, where n equals to the sample size, and then select the same element from each group to form the sample. In stratifies sampling, the N items from the frame are subdivided into separate subgroups based on some common characteristic, e.g., gender, race, year of school, etc. In this section, Gender was used to perform stratified sampling. Also, in order to determine how well the sample was, Age attribute was used to plot the distribution to compare with the original data distribution. 
+
+```{r echo = TRUE}
+# original data
+s0 <- plot_ly(x = drug_age, type = 'histogram', name = 'Unsampled Data') %>%
+  layout(title = "Unsampled Data", xaxis = list(title = "Ages"),
+         yaxis = list(title = "Count")
+  )
+
+# simple random
+set.seed(7174)
+s <- srswor(500, length(drug_age))
+
+sample.1 <- drug_age[s != 0]
+s1 <- plot_ly(x = sample.1, type = 'histogram', name = 'Simple Random Sampling') %>%
+  layout(title = "Simple Random Sampling", xaxis = list(title = "Ages"),
+         yaxis = list(title = "Count"))
+mean1 <- mean(sample.1)
+sd1 <- sd(sample.1)
+
+# Systematic Sampling
+set.seed(7174)
+N <- length(drug_age)
+n <- 500
+k <- round(N / n)
+r <- sample(k, 1)
+s <- seq(r, by = k, length = n)
+sample.2 <- drug_age[s]
+s2 <- plot_ly(x = sample.2, type = 'histogram', name = 'Systematic Sampling') %>%
+  layout(title = "Systematic Sampling", xaxis = list(title = "Ages"),
+         yaxis = list(title = "Count"))
+mean2 <- mean(sample.2)
+sd2 <- sd(sample.2)
+# Stratified Sampling
+set.seed(1232)
+data1 <- subset(drug_deaths, drug_deaths$Sex == 'Male' |drug_deaths$Sex == 'Female' )
+freq <- table(data1$Sex)
+st.sizes <- round(500 * freq / sum(freq))
+data1 <- data1[order(data1$Sex),]
+st.2 <- sampling::strata(data1, stratanames = c("Sex"),
+               size = st.sizes, method = "srswor",
+               description = FALSE)
+sample.3 <- getdata(data1, st.2)
+s3 <- plot_ly(x = sample.3$Age, type = 'histogram', name = 'Stratified Sampling') %>%
+  layout(title = "Stratified Sampling", xaxis = list(title = "Ages"),
+         yaxis = list(title = "Count"))
+mean3 <- mean(sample.3$Age)
+sd3 <- sd(sample.3$Age)
+
+# plot
+subplot(s0,s1,s2,s3, 
+        nrows = 4,
+        titleY = TRUE)%>%
+  layout(title = 'Different Sampling methods')
+
+# conclusion
+cat(' Unsampled data: Mean = ',mean0, 'and SD =', sd0,'\n')%>%
+  cat('simple Random Sampling: Mean = ',mean1, 'and SD =', sd1,'\n')%>%
+  cat('Systematic Sampling: Mean = ',mean2, 'and SD =', sd2,'\n')%>%
+  cat('Stratified Sampling: Mean = ',mean3, 'and SD =', sd3,'\n')
+```
+
+As shown in the graph above, each sampling was well matched the trends and patterns with the original data, and the mean and standard deviation was very close to the original population. 
+
+
+
+# Conclusions
+
+In conclusion, The deaths caused by drug overdose was analysed from the victims' age, race, gender and city of death occurred. As shown in the previous graph, the death caused by drug overdose has increased by almost 4 times from 2012 to 2018. which means we need to take actions to prevent this. The average age of drug overdosed death is only 40 years old, and only 31 years old for Asians. Most of them start to take drugs as teenagers, parents has the biggest influence in child's life so having open and honest conversations is one of the powerful ways to help them develop into healthy adults. And as a friend, if you see someone are taking drugs, do not hesitated to help them. 
