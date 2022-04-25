@@ -1,0 +1,240 @@
+---
+title: "NBA Players Salary Prediction"
+author: "Yuxiao Wu"
+date: 2022-4-6
+output:
+  html_document:
+    fig_width: 8
+    code_folding: hide
+    highlight: tango
+    toc: yes
+    toc_float:
+      collapsed: yes
+  pdf_document:
+    toc: yes
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width=8, fig.height=4,
+                      echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+
+
+# Introduction
+
+As the NBA has become one of the most popularly debated sports in the world, the discussion on how each players’ social status, performances, team contribution (and etc) were contributing to their salaries has been heatedly discussed. Obviously, the range of each players' salary varies a lot. However, I would like to build a linear regression model to predict players’ salary based on factors that contribute the most to our target variable, salary.
+The result of this project could be deployed by individual players, NBA teams, as well as business organizations to further conduct strategies on improving salaries, predicting next seasons’ profits, and other business purposes. 
+![an image caption Source: https://thesportsdaily.com/wp-content/uploads/sites/95/2018/06/usatsi_10872788.jpg?w=1000&h=600&crop=1](C:/Users/74545/Desktop/curry.jpg)
+
+
+# The Dataset 
+
+The following data frame captures the recorded for NBA players for 2017 to 2018 season. The data set was retrieved from Kaggle. Attributes of the data includes the Age, height, weight for players and their position, games attended, Average Minutes played Per Game, Average Points Per Game, Player Efficiency Rating, etc.. 
+
+```{r echo=TRUE}
+library(plotly)
+library(prob)
+library(tidyr)
+library(RColorBrewer)
+
+# import datasets
+season_stat_2017 <- read.csv(file = 'https://raw.githubusercontent.com/yuxiao-wu/R-Projects/main/NBA%20player%20salary%20prediction/Seasons_Stats.csv')
+player <- read.csv(file = 'https://raw.githubusercontent.com/yuxiao-wu/R-Projects/main/NBA%20player%20salary%20prediction/Players.csv')
+season17_salary <- read.csv(file = 'https://raw.githubusercontent.com/yuxiao-wu/R-Projects/main/NBA%20player%20salary%20prediction/Season17_salary.csv')
+
+# combine data sets and clean NA data
+data <- merge(x = season_stat_2017, y = player, by = 'Player')
+data <- merge(x = data, y = season17_salary, by = 'Player')
+data <- na.omit(data)
+data<- data[data$Pos != 'PF-C',]
+data <- arrange(data, desc(Salary))
+data1 <- data[,c('FT', 'FTA', 'G', 'GS', 'FG', 'FGA', 'ORB', 'TOV', 'AST', 'OWS', 'DWS', 'BPM', 'VORP', 'X2P', 'X3P', 'DRB', 'STL', 'WS','height', 'weight', 'Salary')]
+
+```
+# General Analysis
+## Highest Paid NBA players 2017
+
+Firstly, we might want to see who is the highest paid NBA player. As shown in the bar chart below, where x axis is Player name and y axis is the Salary, Stephen Curry receives the highest salary which is 35 million, followed by LeBron James, Paul Millsan...
+
+```{r echo=TRUE}
+# -------------------------- data exploration -----------------------------
+fig <- plot_ly(
+  x = data$Player[1:10],y = data$Salary[1:10],type = "bar", marker = list(color = 'rgba(55, 128, 191, 0.7)'),
+  text = ~paste(format(data$Salary[1:10]/1000000, digits = 2), 'M') )%>%
+  layout(title = 'Top 10 NBA players Salary 2017',
+         xaxis = list(title = "Player Name", categoryorder = "total descending"),
+         yaxis = list(title = "Salary"))
+fig
+```
+
+## NBA Players Salary Distribution
+
+How does the Salary distributed? Among all 509 players in the data set, an histogram plot for their salary was shown below. We can see that most of the player has salary lower than 5 million, while there are players have very high salary, greater than 20 million dollars.
+```{r echo=TRUE}
+# -------------------------- data exploration -----------------------------
+p1 <- plot_ly(data, x = ~Salary, type = 'histogram', histfunc = 'avg',
+              name = 'player',
+              marker = list(color = c('rgba(99, 231, 234, 0.8)')))%>%
+    add_trace(x = ~Salary, name = 'player')%>%
+  layout(title = 'NBA Players Salary Distribution Season 2017',
+         yaxis = list(title = 'Number of Player'),
+         showlegend = FALSE)
+
+p1
+```
+
+
+## Height and Weight vs Salary
+
+We want to take a look for how player's height and weight can affect their salary. As shown in the scatter plots below, we can see that there is no obvious linear relationship between player's weight or height and their salary. Correlation between height/weight and salary are also calculated below, and we can see both of them are very low, which means player's height and weight is not a significant predictor for salary. 
+```{r echo=TRUE}
+# -------------------------- correlation -----------------------------
+fig <- plot_ly(data = data, x = ~height, y = ~Salary, type = 'scatter', 
+                name = 'Player Height')%>%
+  layout(xaxis = list(title = "height/cm"),
+         yaxis = list(title = "Salary"))
+fig2 <- plot_ly(data = data, x = ~weight, y = ~Salary, type = 'scatter',
+                 name = 'Player Weight')%>%
+  layout(xaxis = list(title = "weight/kg"),
+         yaxis = list(title = "Salary"))
+
+subplot(fig, fig2)%>%
+  layout(title = list(text = 'NBA player height and weight vs Salary'),
+         yaxis = list(title = "Salary"),
+         xaxis1 = list(title = "height/cm"),
+         xaxis2 = list(title = "weight/kg"))
+
+cat(' correlation between player height and salary = ', cor(data$height, data$Salary),'\n')%>%
+cat('correlation between player height and salary = ', cor(data$weight, data$Salary),'\n')
+```
+
+## Other Features Correlations
+Now we are interested in which variable has the highest correlation with players salary. Below is a bar chart plot variables and their correlation with salary. From the plot we can see WS(Win share) has the highest correlation with salary, followed by FG(Field Goal), etc..
+```{r echo=TRUE}
+# -------------------------- correlation -----------------------------
+correlations <- cor(data1[,1:20],data1$Salary)
+variables <- rownames(correlations)
+correlation <- correlations[1:20]
+names(correlation) <- variables
+correlation <- sort(correlation, decreasing = TRUE)
+fig <- plot_ly(
+  x = names(correlation),
+  y = correlation,
+  type = "bar", marker = list(color = heat.colors(n=20)),
+  text = ~ format(correlation, digit = 2))%>%
+  layout(title = 'Correlations between each variables vs Salary',
+         xaxis = list(title = "Variables", categoryorder = "total descending"),
+         yaxis = list(title = "Correlation"))
+fig
+
+```
+
+# Linear Regression Model
+## Simple Linear Regression 
+
+Now we want to predict the player's salary using some attributes in data set. By looking at the correlations, we found the attribute with highest correlation with salary is Win Share, which equals 0.737. Win Share is a measure that is assigned to players based on their offense, defense, and playing time. So I decide to use WS to build a simple linear regression model to predict salary. As shown in the below graph, Win share vs Salary are plotted in a scatter plot. we can see there is a strong linear relationship between player's win share and their salary. 
+```{r echo=TRUE}
+cat('correlation between win share and salary = ', cor(data$Salary, data$WS),'\n')
+m0 <- lm(data$Salary ~ data$WS)
+
+fig3 <- plot_ly(data = data, x = ~WS, y = ~Salary, color = ~Team,
+        hoverinfo = "text",type = 'scatter',mode = 'markers',
+        text = ~paste("Player: ", Player,
+                      "<br>Salary: ", format(Salary, big.mark = ","),"$",
+                      "<br>Win share: ", WS,
+                      "<br>Team: ", Team))%>%
+  add_markers(y = ~Salary) %>% 
+  add_trace(x = ~WS, y = 1731787 + 1914393 * data$WS, mode = "lines",
+            color = I("red"), name = 'regression line') %>%
+  layout(
+    title = "Salary vs Win Shares",
+    xaxis = list(title = "Win Shares"),
+    yaxis = list(title = "Salary USD"),
+    showlegend = T
+  )
+fig3
+summary(m0)
+
+
+```
+By using summary function, as the result shown, the linear equation can be written as y = 1731787 + 1914393x, The R-square for this model is 0.5144.
+
+
+## Mutivariable Linear Regression
+
+Now we want to add more attributes to the model, such as total number of games played, games started, Turnover percentage, field goals, 3-point goal, etc..
+```{r echo=TRUE}
+# -------------------------- linear regression -----------------------------
+m <- lm(Salary~ .,data = data1)
+
+summary(m)
+```
+And as the result shown above, the multivariate regression model has a R-squared value 0.6417 and adjusted R-squared value 0.628. We add total 19 attributes, while some of them are insignificant such as height and weight. Therefore, I decide to use forward and backward selection to choose the best variable to add. 
+
+## Forward and Backword selection
+From the result below we can see that by using backward selection, 5 variables was removed and 14 are selected. The resulted R-square is equal to 0.6402 and adjusted R-square is 0.63. 
+```{r echo=TRUE}
+# backward selection
+m1 <- step(m, direction = 'backward', trace=0)
+summary(m1)
+```
+From the result below we can see that forward selection selected 9 variables inclued field goals, Games played, games started, etc.. 10 variables was removed. The resulted R-squared is 0.6305 and R-squared value is 0.6238. 
+```{r echo=TRUE}
+# forward selection
+minModel <- lm(Salary~ 1, data = data1)
+m2 <- step(minModel, direction = 'forward', trace=0,
+           scope = (~FT+ FTA+ G+ GS+ FG+ FGA+ ORB+TOV+ AST+ OWS+ DWS+ BPM+ VORP+ X2P+ X3P+ DRB+ STL+ WS+ height+ weight))
+summary(m2)
+```
+
+
+
+# One-Way Analysis of Variance
+We want to know whether the salary are different for each position, a box plot was created to show the salary distribution by different positions. There are five different positions in basketball games, which are Center, Shooting Guard, Point Guard, Power Forward and Small Forward. From the plot below we can see that Center seems have the highest average salary, followed by Power Forward. While there are many outliers with very high salary and the average salary among 5 positions are very close to each other. Therefore, we need to use one way ANOVA test was performed formally test whether there is a difference between each positions. 
+```{r echo=TRUE}
+# box plot
+fig <- plot_ly(x = data[data$Pos == 'C',]$Salary, type = "box",name = 'Center')%>% 
+  add_trace(x = data[data$Pos == 'PF',]$Salary, name = 'Power Forward')%>% 
+  add_trace(x = data[data$Pos == 'PG',]$Salary,name = 'Point Guard')%>% 
+  add_trace(x = data[data$Pos == 'SF',]$Salary,name = 'Small Forward')%>% 
+  add_trace(x = data[data$Pos == 'SG',]$Salary,name = 'Shooting Guard')%>% 
+  layout(title = "Salary Distribution by Positions",
+                      xaxis = list(title = "Salary"))
+fig
+```
+
+First the hypotheses and alpha level was set up as below:
+H0 ∶ µC = µPF = µPG = µSF = µSG (Salary means for different positions are equal)
+H1: At least one of salary means is different from others
+α = 0.05
+Then F test was select to perform the analysis because we have more than two items to compare. Because there are 5 groups and total 509 rows of data, we set df1 = k-1 = 4 and df2 = 509 - 4 = 504
+```{r echo=TRUE}
+cat("qf(0.95, df1 = 5, df2 = 504) =",qf(0.95, df1 = 5, df2 = 504))
+
+data$Pos = factor(data$Pos)
+m <- aov(data$Salary ~ data$Pos, data=data)
+summary(m)
+```
+From the result above we can state that we will reject H0 if F is greater than 2.232, otherwise, do not reject H0. 
+By using the aov and summary function, we get the F test statistic value to be 2.671, which is greater than 2.232. Therefore, we will reject null hypotheses. Which means we have significant evidence at α = 0.05 that there is a difference in Salary among different positions including Center, Power Forward, Point Guard, Small Forward and Shooting Guard. 
+
+## Pairwise Comparisons
+After knowing the global F test is significant, we want to further determine which of the population group means are different. And t pairwise comparison was used to perform the analysis. 
+```{r echo=TRUE}
+pairwise.t.test(data$Salary, data$Pos, p.adj="bonferroni")
+```
+From the pairwise comparisons result above we can see that all values are high except two pairs which are C - PG and C - SG. So an additional t test was performed to test whether the mean salary for Center and Point Guard are different at α = 0.05 level. 
+```{r echo=TRUE}
+cat("qt(0.975, df= 504) =",qt(0.975, df= 504))
+a <- data[data$Pos == 'C',]$Salary
+b <- data[data$Pos == 'PG',]$Salary
+
+cat('test statistic = ', (mean(a) - mean(b))/sqrt(var(data$Salary)*(1/length(a) + 1/length(b))))
+
+```
+Since t is greater than 1.96, we will reject H0, which means there is significant evidence that the true salary mean is different for Point Guard and Center at α = 0.05 level. 
+
+# Conclusion
+In conclusion, by using multivariate linear regression, a model was built to predict NBA players salary. Some significant predictors include Win Share, Field Goals, Games played, Games started, Total Points, etc.. Then the salary among different positions were compared, we found there is at least one pair of mean salary different from each other by using globe f test, and then pairwise t test was used to find out which two group has different mean salary. 
